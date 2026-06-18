@@ -22,17 +22,12 @@ from solver import Solver
 
 SAVE_FILE = 'cubo_estado.json'
 
-# Cor de cada letra de face, para a visualização 2D planificada
 LETTER_COLOR = {
     'W': cube_module.COLOR_WHITE, 'Y': cube_module.COLOR_YELLOW,
     'R': cube_module.COLOR_RED, 'O': cube_module.COLOR_ORANGE,
     'G': cube_module.COLOR_GREEN, 'B': cube_module.COLOR_BLUE,
 }
 
-# Posição (coluna, linha) do canto superior-esquerdo de cada face na planificação:
-#         [ U ]
-#   [ L ] [ F ] [ R ] [ B ]
-#         [ D ]
 FACE_BLOCK = {'U': (3, 0), 'L': (0, 3), 'F': (3, 3), 'R': (6, 3), 'B': (9, 3), 'D': (3, 6)}
 
 
@@ -43,22 +38,18 @@ class CubeControls:
         self.cube = rubiks_cube
         self.solver = Solver(self.cube)
         self.move_duration = 0.35
-        self.solving_mode = False  # True depois de "Resolver" até o cubo ficar pronto de novo
-        self.error_message = None  # mensagem de erro do solver (estado inválido), se houver
+        self.solving_mode = False
+        self.error_message = None
         self.sound_on = True
 
-        # --- Câmera orbitável: botão direito + arrastar = girar, roda = zoom ---
         camera.position = (0, 0, -14)
         self.editor_camera = EditorCamera(rotation_speed=200, zoom_speed=6, rotate_key='right mouse')
-        self.editor_camera.rotation = (25, -35, 0)  # ângulo inicial em 3/4, mostrando 3 faces
+        self.editor_camera.rotation = (25, -35, 0)
 
         self._build_ui()
         self._refresh_status()
 
-    # ======================================================== construção UI
     def _build_ui(self):
-        # tudo da UI do jogo fica sob um único Entity, para poder ser
-        # escondido de uma vez quando o menu inicial estiver na tela
         self.ui_root = Entity(parent=camera.ui)
 
         panel = Entity(parent=self.ui_root, position=window.top_left + Vec2(0.03, -0.04))
@@ -104,7 +95,6 @@ class CubeControls:
         self._build_flat_view()
         self._build_settings_panel()
 
-        # --- Painel de status (canto superior direito) ---
         info = Entity(parent=self.ui_root, position=window.top_right + Vec2(-0.40, -0.04))
         self.status_text = Text(parent=info, text='Estado: Resolvido', position=(0, 0),
                                  color=color.lime, scale=1.1)
@@ -123,7 +113,7 @@ class CubeControls:
         self.flat_view_panel = Entity(parent=self.ui_root, position=(0, -0.33), enabled=False)
         Entity(parent=self.flat_view_panel, model='quad', color=color.rgba(0, 0, 0, 0.92),
                scale=(bg_w, bg_h), z=0.01)
-        self.flat_squares = {}  # (face, índice 0-8) -> Entity
+        self.flat_squares = {}
         for face, (col0, row0) in FACE_BLOCK.items():
             for i in range(9):
                 row, col = col0 + (i % 3), row0 + (i // 3)
@@ -169,7 +159,6 @@ class CubeControls:
         if text_entity.text != value:
             text_entity.text = value
 
-    # ============================================================ feedback
     def _refresh_status(self, current_move=None):
         if self.error_message:
             self.status_text.color = color.red
@@ -200,7 +189,6 @@ class CubeControls:
         pending = self.solver.pending()
         self._set_text(self.solution_text, 'Solucao: ' + (' '.join(pending) if pending else '-'))
 
-    # ============================================================== botões
     def on_scramble(self):
         if self.cube.animating or self.cube.exploded:
             return
@@ -318,8 +306,6 @@ class CubeControls:
         exploded = not self.cube.exploded
         self.cube.set_exploded(exploded)
         self._set_text(self.btn_explode, f'Modo Explodido: {"ON" if exploded else "OFF"}')
-        # a leitura do estado (usada pela visão 2D e pelo solver) parte do
-        # princípio de que as peças estão na grade "normal" (não explodida)
         if exploded and self.flat_view_panel.enabled:
             self.flat_view_panel.enabled = False
             self._set_text(self.btn_flat, 'Ver em 2D: OFF')

@@ -19,29 +19,20 @@ from collections import deque
 from ursina import Entity, Mesh, Vec3, Audio, color, curve, destroy, Func
 
 
-# ---------------------------------------------------------------------------
-# Esquema de cores oficial do cubo mágico
-# ---------------------------------------------------------------------------
 COLOR_WHITE = color.rgb32(255, 255, 255)
 COLOR_YELLOW = color.rgb32(255, 213, 0)
 COLOR_RED = color.rgb32(196, 30, 58)
 COLOR_ORANGE = color.rgb32(255, 88, 0)
 COLOR_BLUE = color.rgb32(0, 70, 173)
 COLOR_GREEN = color.rgb32(0, 158, 96)
-COLOR_BODY = color.black  # cor do "plástico" do cubo (faces internas)
+COLOR_BODY = color.black
 
-# Letra de cada cor, no formato usado pela biblioteca de resolução cube_solver
-# (que usa exatamente o mesmo esquema de cores que o nosso: U=branco, F=verde,
-# R=vermelho, D=amarelo, B=azul, L=laranja)
 COLOR_LETTER = {
     'top': 'W', 'bottom': 'Y', 'front': 'G', 'back': 'B', 'right': 'R', 'left': 'O',
 }
 
-# Lista com os 12 movimentos possíveis
 MOVE_NAMES = ['U', "U'", 'D', "D'", 'L', "L'", 'R', "R'", 'F', "F'", 'B', "B'"]
 
-# Definição geométrica de cada movimento: eixo de rotação, camada (-1/0/1)
-# e sentido da rotação (+1 ou -1), aplicado ao pivô em torno da origem.
 MOVES = {
     'U':  {'axis': 'y', 'layer': 1, 'dir': -1},
     "U'": {'axis': 'y', 'layer': 1, 'dir': 1},
@@ -59,21 +50,14 @@ MOVES = {
 
 FACES = ['U', 'D', 'L', 'R', 'F', 'B']
 
-# Para cada face, a direção (no mundo) que aponta "para fora" dela.
 FACE_WORLD_DIR = {
     'U': Vec3(0, 1, 0), 'D': Vec3(0, -1, 0),
     'L': Vec3(-1, 0, 0), 'R': Vec3(1, 0, 0),
     'F': Vec3(0, 0, 1), 'B': Vec3(0, 0, -1),
 }
 
-# Nome local da face de uma peça (usado em cubie.face_colors) -> letra da face do cubo
 LOCAL_TO_FACE = {'top': 'U', 'bottom': 'D', 'left': 'L', 'right': 'R', 'front': 'F', 'back': 'B'}
 
-# Para cada face, as coordenadas de grade (x,y,z) das 9 peças que a compõem,
-# na ordem padrão usada por bibliotecas de resolução (linha a linha, de cima
-# para baixo e da esquerda para a direita, olhando para a face pelo lado de
-# fora com U para cima). Essa convenção foi conferida contra a tabela oficial
-# de adjacência de cantos do algoritmo de Kociemba (cornerFacelet).
 FACELET_GRID = {
     'U': [(-1, 1, -1), (0, 1, -1), (1, 1, -1),
           (-1, 1, 0), (0, 1, 0), (1, 1, 0),
@@ -95,7 +79,6 @@ FACELET_GRID = {
           (-1, -1, -1), (0, -1, -1), (1, -1, -1)],
 }
 
-# Ordem de faces esperada pela biblioteca de resolução (cube_solver)
 SOLVER_FACE_ORDER = 'ULFRBD'
 
 
@@ -104,9 +87,6 @@ def inverse_move(move):
     return move[:-1] if move.endswith("'") else move + "'"
 
 
-# ---------------------------------------------------------------------------
-# Som (efeito simples ao girar uma face)
-# ---------------------------------------------------------------------------
 _click_sound = None
 _sound_enabled = True
 
@@ -156,27 +136,26 @@ def _cubie_mesh(face_colors):
 class RubiksCube(Entity):
     """Cubo mágico 3x3x3 jogável em 3D: contém as 26 peças e os movimentos."""
 
-    SPACING = 1.02   # distância entre os centros das peças (gera as frestas pretas)
-    GAP_SCALE = 0.95  # escala de cada peça (menor que SPACING -> aparecem frestas)
-    EXPLODE_FACTOR = 0.8  # afastamento extra de cada peça no modo "explodido"
+    SPACING = 1.02
+    GAP_SCALE = 0.95
+    EXPLODE_FACTOR = 0.8
 
     def __init__(self):
         super().__init__()
-        self.cubies = []           # as 26 peças (Entities)
-        self.history = []          # movimentos realizados desde o último estado resolvido
-        self.animating = False     # True enquanto alguma animação de giro está rodando
-        self.exploded = False      # True enquanto o modo de visualização "explodido" está ativo
+        self.cubies = []
+        self.history = []
+        self.animating = False
+        self.exploded = False
         self._highlight = None
-        self._generation = 0       # incrementado a cada reset, para invalidar animações antigas em andamento
+        self._generation = 0
         self._build()
 
-    # ----------------------------------------------------------------- build
     def _build(self):
         for x in (-1, 0, 1):
             for y in (-1, 0, 1):
                 for z in (-1, 0, 1):
                     if x == 0 and y == 0 and z == 0:
-                        continue  # núcleo interno não existe fisicamente no cubo real
+                        continue
                     face_colors = {}
                     if x == 1:
                         face_colors['right'] = COLOR_RED
@@ -198,8 +177,8 @@ class RubiksCube(Entity):
                         scale=self.GAP_SCALE,
                         double_sided=True,
                     )
-                    cubie.grid_origin = Vec3(x, y, z)  # posição "resolvida" original
-                    cubie.face_colors = face_colors    # nomes locais coloridos ('top', 'right', ...)
+                    cubie.grid_origin = Vec3(x, y, z)
+                    cubie.face_colors = face_colors
                     self.cubies.append(cubie)
 
     def reset_instant(self):
@@ -226,9 +205,6 @@ class RubiksCube(Entity):
         visual: a posição usada pela lógica dos movimentos continua sendo a
         posição "real" (sem o afastamento), por isso giros não devem ser
         feitos enquanto o cubo está explodido (ver `CubeControls`)."""
-        # usa a escala ATUAL (antes da troca) para recuperar a coordenada de
-        # grade corretamente, já que a posição de uma peça explodida usa uma
-        # escala diferente da posição normal (SPACING simples)
         old_scale = self.SPACING + (self.EXPLODE_FACTOR if self.exploded else 0.0)
         new_scale = self.SPACING + (self.EXPLODE_FACTOR if exploded else 0.0)
         for c in self.cubies:
@@ -239,7 +215,6 @@ class RubiksCube(Entity):
             c.animate_position(target, duration=duration, curve=curve.in_out_quad)
         self.exploded = exploded
 
-    # ------------------------------------------------------------- consultas
     def is_solved(self):
         """Verifica se toda peça está na posição e orientação originais.
 
@@ -304,7 +279,6 @@ class RubiksCube(Entity):
                 chars.append(self._facelet_letter(cubie, world_dir))
         return ''.join(chars)
 
-    # --------------------------------------------------------------- giros
     def _show_highlight(self, axis, layer):
         size = 3.05 * self.SPACING
         thin = 0.05
@@ -344,10 +318,6 @@ class RubiksCube(Entity):
 
         def _finish():
             if generation != self._generation:
-                # o cubo foi resetado enquanto este movimento ainda animava;
-                # as peças desta camada já foram destruídas pelo reset, então
-                # só descartamos o pivô órfão e não chamamos on_complete
-                # (isso encerra naturalmente qualquer fila de movimentos antiga).
                 destroy(pivot)
                 return
             for c in layer_cubies:
@@ -365,10 +335,6 @@ class RubiksCube(Entity):
                 on_complete(move)
 
         if duration > 0:
-            # Encadeia o callback de finalização na PRÓPRIA Sequence da animação
-            # (em vez de um invoke() paralelo) para garantir que _finish() só
-            # rode depois que a rotação tiver realmente sido aplicada ao pivô,
-            # mesmo em quadros lentos ou com durações muito curtas.
             sequence = pivot.animate(rotation_attr, angle, duration=duration, curve=curve.in_out_quad)
             sequence.append(Func(_finish))
         else:
@@ -397,7 +363,6 @@ class RubiksCube(Entity):
 
         _step()
 
-    # ------------------------------------------------------------ embaralhar
     def scramble(self, n=20, duration=0.15, on_each=None, on_done=None):
         """Embaralha o cubo com `n` movimentos aleatórios (mínimo 20) e guarda o histórico."""
         n = max(20, int(n))
@@ -416,7 +381,6 @@ class RubiksCube(Entity):
         self.queue_moves(moves, duration=duration, on_each=on_each, on_done=on_done, record=False)
         return moves
 
-    # ------------------------------------------------------------ persistência
     def to_state(self):
         return [{'p': [c.x, c.y, c.z], 'r': [c.rotation_x, c.rotation_y, c.rotation_z]} for c in self.cubies]
 

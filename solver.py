@@ -53,9 +53,9 @@ class Solver:
 
     def __init__(self, cube):
         self.cube = cube
-        self.queue = deque()   # movimentos da solução ainda não executados
-        self.done = []         # movimentos da solução já executados
-        self.error = None      # mensagem de erro, se o estado atual for inválido
+        self.queue = deque()
+        self.done = []
+        self.error = None
 
     def compute(self):
         """Lê o estado atual do cubo (3D) e calcula a sequência que o resolve."""

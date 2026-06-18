@@ -27,7 +27,6 @@ cube_module.init_sound()
 rubiks_cube = RubiksCube()
 controls = CubeControls(rubiks_cube)
 
-# o jogo começa escondido atrás do menu inicial (ver show_main_menu() abaixo)
 rubiks_cube.enabled = False
 controls.set_visible(False)
 
@@ -78,7 +77,7 @@ def update():
 def input(key):
     """Atalhos de teclado para girar faces manualmente (bonus / depuração)."""
     if not controls.ui_root.enabled:
-        return  # ainda no menu inicial
+        return
     if rubiks_cube.animating or rubiks_cube.exploded:
         return
     base_keys = {'u': 'U', 'd': 'D', 'l': 'L', 'r': 'R', 'f': 'F', 'b': 'B'}
